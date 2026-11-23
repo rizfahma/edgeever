@@ -1,9 +1,9 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowDownUp, ArrowUp, Filter, MoreHorizontal, Plus, Table2, X } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, Filter, GanttChart, MoreHorizontal, Plus, SquareKanban, Table2, X, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   createTableId, isValidTypedTableFilter, tableFilterNeedsValue, TABLE_VIEW_FILTER_LIMIT, TABLE_VIEW_OPERATORS,
-  type NamedTableView, type TableField, type TableViewFilter, type TableViewOperator, type TableViewSort,
+  type NamedTableView, type TableField, type TableViewFilter, type TableViewLayout, type TableViewOperator, type TableViewSort,
 } from "@edgeever/shared";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +11,25 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-type Mode = "filter" | "sort" | "new" | "copy" | "rename" | "delete";
+type Mode = "filter" | "sort" | "new" | "copy" | "rename" | "delete" | "layout";
+
+const LAYOUT_ICONS: Record<TableViewLayout, LucideIcon> = { table: Table2, board: SquareKanban, calendar: CalendarDays, timeline: GanttChart };
+const LAYOUT_LABELS: Record<TableViewLayout, string> = { table: "Table", board: "Board", calendar: "Calendar", timeline: "Timeline" };
+type LayoutDraft = { layout: TableViewLayout; groupFieldId?: string; dateFieldId?: string; endDateFieldId?: string };
+const layoutOf = (view: NamedTableView): LayoutDraft => ({
+  layout: view.layout ?? "table", groupFieldId: view.groupFieldId, dateFieldId: view.dateFieldId, endDateFieldId: view.endDateFieldId,
+});
+/** Merge layout settings into a view; "table" removes them entirely. */
+const withLayout = (view: NamedTableView, draft: LayoutDraft): NamedTableView => {
+  const { layout: _layout, groupFieldId: _group, dateFieldId: _date, endDateFieldId: _end, ...rest } = view;
+  if (draft.layout === "table") return rest;
+  return {
+    ...rest, layout: draft.layout,
+    ...(draft.layout === "board" && draft.groupFieldId ? { groupFieldId: draft.groupFieldId } : {}),
+    ...(draft.layout !== "board" && draft.dateFieldId ? { dateFieldId: draft.dateFieldId } : {}),
+    ...(draft.layout === "timeline" && draft.endDateFieldId && draft.endDateFieldId !== draft.dateFieldId ? { endDateFieldId: draft.endDateFieldId } : {}),
+  };
+};
 type FilterDraft = { id: number; rule: TableViewFilter };
 type Props = {
   fields: TableField[];
@@ -94,12 +112,16 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
   const nextId = useRef(active.filters.length);
   const [filters, setFilters] = useState<FilterDraft[]>(() => active.filters.map((rule, id) => ({ id, rule })));
   const [sorts, setSorts] = useState(active.sorts);
+  const [layout, setLayout] = useState<LayoutDraft>(() => mode === "new" ? { layout: "table" } : layoutOf(active));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const descriptionId = useId();
   const byId = new Map(fields.map((field) => [field.id, field]));
   const named = mode === "new" || mode === "copy" || mode === "rename";
-  const valid = named ? Boolean(name.trim()) : mode === "filter"
+  const selectFields = fields.filter((field) => field.type === "select");
+  const dateFields = fields.filter((field) => field.type === "date");
+  const layoutReady = layout.layout === "table" || (layout.layout === "board" ? selectFields.length > 0 : dateFields.length > 0);
+  const valid = mode === "layout" ? layoutReady : named ? Boolean(name.trim()) && (mode !== "new" || layoutReady) : mode === "filter"
     ? filters.every(({ rule }) => {
       const field = byId.get(rule.fieldId);
       return field && (rule.legacy || isValidTypedTableFilter(field, rule));
@@ -114,12 +136,12 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
     if (mode === "new" || mode === "copy") {
       selected = createTableId("view");
       next = [...views, mode === "copy" ? { ...active, id: selected, name }
-        : { id: selected, name, match: "all", filters: [], sorts: [] }];
+        : withLayout({ id: selected, name, match: "all", filters: [], sorts: [] }, layout)];
     } else if (mode === "delete") {
       next = views.filter((view) => view.id !== active.id);
       selected = next[Math.max(0, views.findIndex((view) => view.id === active.id) - 1)]!.id;
     } else {
-      next = views.map((view) => view.id !== active.id ? view : {
+      next = views.map((view) => view.id !== active.id ? view : mode === "layout" ? withLayout(view, layout) : {
         ...view, ...(mode === "filter" ? { match, filters: filters.map(({ rule }) => rule) }
           : mode === "sort" ? { sorts } : { name }),
       });
@@ -144,7 +166,17 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
     return next;
   });
   const unusedSortField = fields.find((field) => !sorts.some((sort) => sort.fieldId === field.id));
-  const title = mode === "filter" || mode === "sort" ? t(`structuredTable.${mode}`) : t(`structuredTable.views.${mode}`);
+  const title = mode === "layout" ? t("pmViews.layout", { defaultValue: "Layout" })
+    : mode === "filter" || mode === "sort" ? t(`structuredTable.${mode}`) : t(`structuredTable.views.${mode}`);
+  const fieldSelect = (label: string, value: string | undefined, options: TableField[], onChange: (id: string | undefined) => void, optional = false) => (
+    <label className="grid gap-1.5 text-sm">
+      {label}
+      <select className={selectClass} value={value ?? (optional ? "" : options[0]?.id ?? "")} onChange={(event) => onChange(event.target.value || undefined)}>
+        {optional && <option value="">{t("pmViews.noEndDate", { defaultValue: "None (one-day bars)" })}</option>}
+        {options.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}
+      </select>
+    </label>
+  );
   return (
     <DialogContent className="w-[calc(100%-1.5rem)] max-w-2xl p-4 sm:p-6" showCloseButton={false}
       aria-describedby={mode === "delete" ? descriptionId : undefined}
@@ -158,6 +190,38 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
             {t("structuredTable.views.name")}
             <Input autoFocus value={name} onChange={(event) => setName(event.target.value)} />
           </label>
+        )}
+        {(mode === "new" || mode === "layout") && (
+          <fieldset className="grid gap-3" disabled={readOnly}>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label={t("pmViews.layout", { defaultValue: "Layout" })}>
+              {(Object.keys(LAYOUT_ICONS) as TableViewLayout[]).map((item) => {
+                const Icon = LAYOUT_ICONS[item];
+                return (
+                  <button key={item} type="button" role="radio" aria-checked={layout.layout === item}
+                    onClick={() => setLayout((current) => ({
+                      ...current, layout: item,
+                      groupFieldId: current.groupFieldId ?? selectFields[0]?.id,
+                      dateFieldId: current.dateFieldId ?? dateFields[0]?.id,
+                    }))}
+                    className="flex flex-col items-center gap-1.5 rounded-md border border-border px-2 py-3 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-checked:border-foreground aria-checked:bg-muted/50 aria-checked:font-medium aria-checked:text-foreground">
+                    <Icon className="size-5" aria-hidden="true" />
+                    {t(`pmViews.layout_${item}`, { defaultValue: LAYOUT_LABELS[item] })}
+                  </button>
+                );
+              })}
+            </div>
+            {layout.layout === "board" && (selectFields.length
+              ? fieldSelect(t("pmViews.groupBy", { defaultValue: "Columns from" }), layout.groupFieldId, selectFields, (id) => setLayout((current) => ({ ...current, groupFieldId: id })))
+              : <p className="text-sm text-muted-foreground">{t("pmViews.boardNeedsSelect", { defaultValue: "A board groups cards by a pick-list column. Add a select column (for example Status) to use this view." })}</p>)}
+            {(layout.layout === "calendar" || layout.layout === "timeline") && (dateFields.length ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {fieldSelect(t(layout.layout === "calendar" ? "pmViews.dateField" : "pmViews.startField", { defaultValue: layout.layout === "calendar" ? "Date" : "Start date" }),
+                  layout.dateFieldId, dateFields, (id) => setLayout((current) => ({ ...current, dateFieldId: id })))}
+                {layout.layout === "timeline" && fieldSelect(t("pmViews.endField", { defaultValue: "End date" }), layout.endDateFieldId,
+                  dateFields.filter((field) => field.id !== (layout.dateFieldId ?? dateFields[0]?.id)), (id) => setLayout((current) => ({ ...current, endDateFieldId: id })), true)}
+              </div>
+            ) : <p className="text-sm text-muted-foreground">{t("pmViews.calendarNeedsDate", { defaultValue: "This layout needs a date column. Add one first." })}</p>)}
+          </fieldset>
         )}
         {mode === "delete" && <DialogDescription id={descriptionId}>{t("structuredTable.views.deleteConfirm", { name: label(active) })}</DialogDescription>}
         {mode === "filter" && (
@@ -266,7 +330,7 @@ export function TableViewControls(props: Props) {
             {views.map((view) => (
               <button type="button" key={view.id} aria-pressed={view.id === active.id} onClick={() => onSelect(view.id)}
                 className="flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-2.5 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:border-foreground aria-pressed:font-medium aria-pressed:text-foreground">
-                <Table2 aria-hidden="true" className="size-3.5" />
+                {(() => { const Icon = LAYOUT_ICONS[view.layout ?? "table"]; return <Icon aria-hidden="true" className="size-3.5" />; })()}
                 <span className="max-w-44 truncate">{view.name || t("structuredTable.views.default")}</span>
               </button>
             ))}
@@ -284,6 +348,7 @@ export function TableViewControls(props: Props) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
+                  <DropdownMenuItem onSelect={() => open("layout", menuButton.current)}>{t("pmViews.changeLayout", { defaultValue: "Change layout…" })}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => open("rename", menuButton.current)}>{t("structuredTable.views.rename")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => open("copy", menuButton.current)}>{t("structuredTable.views.copy")}</DropdownMenuItem>
                   <DropdownMenuItem disabled={views.length <= 1} onSelect={() => open("delete", menuButton.current)}>{t("structuredTable.views.delete")}</DropdownMenuItem>
@@ -293,6 +358,15 @@ export function TableViewControls(props: Props) {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1 py-1">
+          {!readOnly && (() => {
+            const current = active.layout ?? "table";
+            const Icon = LAYOUT_ICONS[current];
+            return (
+              <Button type="button" size="sm" variant={current === "table" ? "ghost" : "soft"} onClick={(event) => open("layout", event.currentTarget)}>
+                <Icon className="size-3.5" /> {t(`pmViews.layout_${current}`, { defaultValue: LAYOUT_LABELS[current] })}
+              </Button>
+            );
+          })()}
           {(["filter", "sort"] as const).map((item) => {
             const count = item === "filter" ? active.filters.length : active.sorts.length;
             const Icon = item === "filter" ? Filter : ArrowDownUp;

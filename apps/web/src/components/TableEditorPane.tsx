@@ -42,6 +42,11 @@ import { IconTooltip } from "@/components/editor/EditorPaneChrome";
 import { MemoTitleInput } from "@/components/MemoTitleInput";
 import { TableFormDialog } from "@/components/dialogs/TableFormDialog";
 import { TableViewControls } from "@/components/TableViewControls";
+import { TableBoardView } from "@/components/table-layouts/TableBoardView";
+import { TableCalendarView } from "@/components/table-layouts/TableCalendarView";
+import { TableRecordDialog } from "@/components/table-layouts/TableRecordDialog";
+import { TableTimelineView } from "@/components/table-layouts/TableTimelineView";
+import { newRecordDateFieldId, titleFieldId, todayIso } from "@/components/table-layouts/layout-helpers";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -756,9 +761,21 @@ export const TableEditorPane = ({
     const timer = window.setTimeout(() => refreshWeek((value) => value + 1), next.getTime() - now.getTime());
     return () => window.clearTimeout(timer);
   }, [weekRevision, relativeWeek]);
-  const visibleRecords = useMemo(() => document && activeView
-    ? applyTableView(document, document.records, activeView) : [], [activeView, document, weekRevision]);
+  // Records added in this session stay at the top of the table, whatever the
+  // view's sort or filter, so a new row is never lost at the bottom.
+  const [pinnedRecordIds, setPinnedRecordIds] = useState<string[]>([]);
+  const [openRecordId, setOpenRecordId] = useState<string | null>(null);
+  const visibleRecords = useMemo(() => {
+    if (!document || !activeView) return [];
+    const viewed = applyTableView(document, document.records, activeView);
+    if (!pinnedRecordIds.length) return viewed;
+    const pinned = new Set(pinnedRecordIds);
+    const byId = new Map(document.records.map((record) => [record.id, record]));
+    const top = pinnedRecordIds.flatMap((id) => byId.get(id) ?? []);
+    return [...top, ...viewed.filter((record) => !pinned.has(record.id))];
+  }, [activeView, document, pinnedRecordIds, weekRevision]);
   const selectView = (id: string) => {
+    setPinnedRecordIds([]);
     setSelectedViewId(id);
     try { window.localStorage.setItem(viewSelectionKey(memo.id), id); } catch { /* device preference only */ }
   };
@@ -982,6 +999,30 @@ export const TableEditorPane = ({
     </Tooltip>
   );
 
+  const addRecord = (preset: Record<string, string> = {}) => {
+    const current = documentRef.current;
+    if (!current || readOnly || current.records.length >= TABLE_RECORD_LIMIT) return;
+    const id = createTableId("rec");
+    let next = addTableRecord(current, id, "start");
+    const dateFieldId = newRecordDateFieldId(current, activeView);
+    if (dateFieldId && !(dateFieldId in preset)) next = updateTableCell(next, id, dateFieldId, todayIso());
+    for (const [fieldId, value] of Object.entries(preset)) next = updateTableCell(next, id, fieldId, value);
+    changeDocument(next);
+    if ((activeView.layout ?? "table") === "table") {
+      setPinnedRecordIds((ids) => [id, ...ids]);
+      scrollRef.current?.scrollTo({ top: 0 });
+      const fieldId = titleFieldId(next);
+      if (fieldId) {
+        const cell = { recordId: id, fieldId };
+        editingRef.current = cell;
+        draftRef.current = "";
+        setEditing(cell);
+      }
+    } else {
+      setOpenRecordId(id);
+    }
+  };
+
   const exportCsv = () => {
     const blob = new Blob([tableDocumentToCsv(document, visibleRecords)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1087,7 +1128,7 @@ export const TableEditorPane = ({
               size="sm"
               disabled={readOnly || recordLimitReached}
               aria-label={recordLimitReached ? t("structuredTable.recordLimit") : t("structuredTable.addRecord")}
-              onClick={() => changeDocument(addTableRecord(document))}
+              onClick={() => addRecord()}
             >
               <Plus className="h-4 w-4" />
               {t("structuredTable.addRecord")}
@@ -1105,6 +1146,18 @@ export const TableEditorPane = ({
         open={formOpen}
         onOpenChange={setFormOpen}
       />
+      <TableRecordDialog document={document} recordId={openRecordId} readOnly={readOnly}
+        onChange={changeDocument} onClose={() => setOpenRecordId(null)} />
+      {activeView.layout === "board" ? (
+        <TableBoardView document={document} records={visibleRecords} view={activeView} readOnly={readOnly}
+          onChange={changeDocument} onOpenRecord={setOpenRecordId} onAddRecord={addRecord} />
+      ) : activeView.layout === "calendar" ? (
+        <TableCalendarView document={document} records={visibleRecords} view={activeView} readOnly={readOnly}
+          onChange={changeDocument} onOpenRecord={setOpenRecordId} onAddRecord={addRecord} />
+      ) : activeView.layout === "timeline" ? (
+        <TableTimelineView document={document} records={visibleRecords} view={activeView} readOnly={readOnly}
+          onChange={changeDocument} onOpenRecord={setOpenRecordId} />
+      ) : (
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         <table
           className="min-w-full table-fixed border-separate border-spacing-0"
@@ -1165,6 +1218,7 @@ export const TableEditorPane = ({
           <p className="px-4 py-8 text-sm text-slate-500">{filtered ? t("structuredTable.noMatches") : t("structuredTable.empty")}</p>
         ) : null}
       </div>
+      )}
       {assistantLauncher}
     </div>
     {assistantSidebar}

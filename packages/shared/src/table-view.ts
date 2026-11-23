@@ -28,6 +28,10 @@ export type TypedTableFilter = {
 };
 export type TableViewFilter = TypedTableFilter | (TableFilter & { legacy: true });
 export type TableViewSort = TableSort & { legacy?: true };
+/** How a saved view presents its records. Missing means "table". */
+export const TABLE_VIEW_LAYOUTS = ["table", "board", "calendar", "timeline"] as const;
+export type TableViewLayout = (typeof TABLE_VIEW_LAYOUTS)[number];
+
 export type NamedTableView = {
   id: string;
   /** Empty only for the inherited, localized default view. */
@@ -35,6 +39,34 @@ export type NamedTableView = {
   match: "all" | "any";
   filters: TableViewFilter[];
   sorts: TableViewSort[];
+  /** Board, calendar and timeline layouts. Omitted for the plain table. */
+  layout?: Exclude<TableViewLayout, "table">;
+  /** Board: select field whose options become the columns. */
+  groupFieldId?: string;
+  /** Calendar and timeline: date field that places a record. */
+  dateFieldId?: string;
+  /** Timeline: optional end date field; bars are one day long without it. */
+  endDateFieldId?: string;
+};
+
+/**
+ * Keep only layout settings that still point at a field of the right type.
+ * A stale reference (field deleted or retyped) falls back to the first
+ * suitable field rather than invalidating the whole view.
+ */
+export const normalizeTableViewLayout = (view: Record<string, unknown>, fields: TableField[]): Pick<NamedTableView, "layout" | "groupFieldId" | "dateFieldId" | "endDateFieldId"> => {
+  const layout = view.layout;
+  if (layout !== "board" && layout !== "calendar" && layout !== "timeline") return {};
+  const ofType = (type: TableField["type"], id: unknown) =>
+    fields.find((field) => field.id === id && field.type === type)?.id ?? fields.find((field) => field.type === type)?.id;
+  if (layout === "board") {
+    const groupFieldId = ofType("select", view.groupFieldId);
+    return groupFieldId ? { layout, groupFieldId } : { layout };
+  }
+  const dateFieldId = ofType("date", view.dateFieldId);
+  if (layout === "calendar") return dateFieldId ? { layout, dateFieldId } : { layout };
+  const end = fields.find((field) => field.id === view.endDateFieldId && field.type === "date" && field.id !== dateFieldId)?.id;
+  return { layout, ...(dateFieldId ? { dateFieldId } : {}), ...(end ? { endDateFieldId: end } : {}) };
 };
 
 export const tableFilterNeedsValue = (operator: TableViewOperator) =>

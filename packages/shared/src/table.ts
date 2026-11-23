@@ -1,7 +1,7 @@
 import { Base64 } from "js-base64";
 import {
   DEFAULT_TABLE_VIEW_ID, TABLE_VIEW_SCHEMA_VERSION, TABLE_VIEW_FILTER_LIMIT,
-  isValidTypedTableFilter, matchesTypedTableFilter, tableViewWeek, tableFilterNeedsValue,
+  isValidTypedTableFilter, normalizeTableViewLayout, matchesTypedTableFilter, tableViewWeek, tableFilterNeedsValue,
   type NamedTableView, type TableViewFilter, type TableViewOperator, type TableViewSort, type TypedTableFilter,
 } from "./table-view";
 
@@ -264,7 +264,7 @@ const parseNamedTableViews = (value: unknown, fields: TableField[]): NamedTableV
       seenSorts.add(rule.fieldId);
       sorts.push({ fieldId: rule.fieldId, direction: rule.direction, ...(rule.legacy === true ? { legacy: true } : {}) });
     }
-    views.push({ id: view.id, name: view.name.trim(), match: view.match, filters, sorts });
+    views.push({ id: view.id, name: view.name.trim(), match: view.match, filters, sorts, ...normalizeTableViewLayout(view, fields) });
   }
   return views;
 };
@@ -304,7 +304,7 @@ export const saveTableViews = (document: TableDocument, views: NamedTableView[])
   const validated = parseNamedTableViews(views, document.fields);
   if (!validated) throw new Error("Invalid table views");
   const first = validated[0]!;
-  if (document.schemaVersion === TABLE_SCHEMA_VERSION && validated.length === 1 && first.id === DEFAULT_TABLE_VIEW_ID && !first.name) {
+  if (document.schemaVersion === TABLE_SCHEMA_VERSION && validated.length === 1 && first.id === DEFAULT_TABLE_VIEW_ID && !first.name && !first.layout) {
     const view = legacyViewProjection(first, document.fields);
     if (view) return { ...document, view };
   }
@@ -589,11 +589,14 @@ export const removeTableField = (document: TableDocument, fieldId: string): Tabl
   };
 };
 
-export const addTableRecord = (document: TableDocument, id = createTableId("rec")): TableDocument => {
+export const addTableRecord = (
+  document: TableDocument, id = createTableId("rec"), position: "start" | "end" = "end",
+): TableDocument => {
   if (document.records.length >= TABLE_RECORD_LIMIT || document.records.some((record) => record.id === id)) return document;
   const cells: Record<string, TableCellValue> = {};
   for (const field of document.fields) cells[field.id] = emptyCell(field);
-  return { ...document, records: [...document.records, { id, cells }] };
+  const record = { id, cells };
+  return { ...document, records: position === "start" ? [record, ...document.records] : [...document.records, record] };
 };
 
 export const updateTableCell = (document: TableDocument, recordId: string, fieldId: string, value: unknown): TableDocument => {
