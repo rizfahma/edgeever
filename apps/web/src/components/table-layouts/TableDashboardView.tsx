@@ -212,7 +212,18 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
   const formatNumber = (value: number) => value.toLocaleString(i18n.language, { maximumFractionDigits: 2 });
   const delta = stats.thisMonth - stats.lastMonth;
 
-  const cards = [
+  const metricCards = valueField && metric?.latest ? [
+    { label: t("pmViews.dashLatest", { defaultValue: "Latest {{field}}", field: valueField.name }), value: formatNumber(metric.latest.value), note: formatDate(metric.latest.date), tone: undefined },
+    {
+      label: t("pmViews.dashChange", { defaultValue: "Change" }),
+      value: metric.previous ? `${metric.latest.value >= metric.previous.value ? "+" : ""}${formatNumber(metric.latest.value - metric.previous.value)}` : "–",
+      note: metric.previous ? t("pmViews.dashFrom", { defaultValue: "from {{value}} on {{date}}", value: formatNumber(metric.previous.value), date: formatDate(metric.previous.date) }) : "",
+      tone: metric.previous ? (metric.latest.value >= metric.previous.value ? ACCENT.green : ACCENT.orange) : undefined,
+    },
+    { label: t("pmViews.dashAverage", { defaultValue: "Average" }), value: formatNumber(metric.average ?? 0), note: t("pmViews.dashPoints", { defaultValue: "over {{count}} dates", count: metric.points.length }), tone: undefined },
+    { label: t("pmViews.dashRecords", { defaultValue: "Records" }), value: records.length, note: "", tone: undefined },
+  ] : null;
+  const cards = metricCards && !statusField ? metricCards : [
     {
       label: t("pmViews.dashRecords", { defaultValue: "Records" }), value: records.length,
       note: dateField ? t("pmViews.dashThisMonth", { defaultValue: "{{count}} this month", count: stats.thisMonth }) : "",
@@ -348,7 +359,7 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-2">
-          {dateField && (
+          {dateField && !valueField && (
             <Panel title={t("pmViews.dashByMonth", { defaultValue: "By month" })}
               subtitle={t("pmViews.dashByMonthNote", { defaultValue: "{{field}} in {{year}}", field: dateField.name, year })}
               action={(

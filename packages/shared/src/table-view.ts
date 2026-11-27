@@ -69,8 +69,10 @@ export const normalizeTableViewLayout = (view: Record<string, unknown>, fields: 
   }
   if (layout === "dashboard") {
     const selects = fields.filter((field) => field.type === "select");
+    // A status column only when one is chosen or clearly named; metric tables
+    // (a weekly score per stage, say) have none.
     const groupFieldId = selects.find((field) => field.id === view.groupFieldId)?.id
-      ?? selects.find((field) => /status|state|stage/i.test(field.name))?.id ?? selects[0]?.id;
+      ?? selects.find((field) => /^(status|state|状态|狀態|estado|statut)/i.test(field.name.replace(/^[^\p{L}]+/u, "")))?.id;
     const breakdownFieldId = selects.find((field) => field.id === view.breakdownFieldId && field.id !== groupFieldId)?.id
       ?? (view.breakdownFieldId === undefined ? undefined : selects.find((field) => field.id !== groupFieldId)?.id);
     const dateFieldId = ofType("date", view.dateFieldId);

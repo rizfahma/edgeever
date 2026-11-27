@@ -93,4 +93,12 @@ describe("table view layouts", () => {
     expect(views[1].valueFieldId).toBe("fld_score");
     expect(views[2].valueFieldId).toBeUndefined();
   });
+
+  test("dashboard has no status column unless one is chosen or named Status", () => {
+    let document = addTableField(createDefaultTableDocument(), { id: "fld_stage", name: "Journey stage", type: "select", options: ["Buy"] });
+    document = removeTableField(document, "fld_status");
+    const [initial] = getTableViews(document);
+    const saved = saveTableViews(document, [initial, { id: "dash", name: "Dashboard", match: "all", filters: [], sorts: [], layout: "dashboard" }]);
+    expect(saved.views[1].groupFieldId).toBeUndefined();
+  });
 });
