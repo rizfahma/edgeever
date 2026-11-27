@@ -23,12 +23,19 @@ const DONE = /done|complete|closed|resolved|selesai|deployed|finished/i;
 const PROGRESS = /progress|ongoing|review|remediat|wip|berjalan|doing/i;
 const BLOCKED = /reject|cancel|block|fail|overdue|postpone/i;
 const WAITING = /wait|hold|pending|menunggu/i;
+// Informational states: neither work to do nor finished work.
+const PARKED = /noted|info|fyi|archiv|cancel|reject|duplicate/i;
 
-const ACCENT = { blue: "#2563EB", orange: "#EA7A12", green: "#16A34A", rose: "#E11D48", slate: "#94A3B8" } as const;
+// Colours follow the active colour scheme (lib/color-schemes.ts) when one is set.
+const ACCENT = {
+  blue: "var(--edgeever-chart-1, #2563EB)", orange: "var(--edgeever-chart-2, #EA7A12)", green: "var(--edgeever-chart-3, #16A34A)",
+  rose: "#E11D48", slate: "#94A3B8",
+} as const;
 
 const statusAccent = (label: string) => {
   if (DONE.test(label)) return ACCENT.green;
   if (PROGRESS.test(label)) return ACCENT.blue;
+  if (PARKED.test(label)) return ACCENT.slate;
   if (BLOCKED.test(label)) return ACCENT.rose;
   if (WAITING.test(label)) return ACCENT.slate;
   return ACCENT.orange;
@@ -94,12 +101,17 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
 
   const stats = useMemo(() => {
     const isDone = (record: TableRecord) => DONE.test(textOf(record, statusField));
+    const isOpen = (record: TableRecord) => {
+      const status = textOf(record, statusField);
+      return !DONE.test(status) && !PARKED.test(status);
+    };
     const done = statusField ? records.filter(isDone).length : 0;
+    const open = statusField ? records.filter(isOpen).length : 0;
     const thisMonth = dated.filter((item) => item.date.startsWith(monthKey)).length;
     const lastMonth = dated.filter((item) => item.date.startsWith(lastMonthKey)).length;
     const upcoming = dated.filter((item) => item.date >= today).sort((a, b) => a.date.localeCompare(b.date));
-    const overdue = statusField ? dated.filter((item) => item.date < today && !isDone(item.record) && !BLOCKED.test(textOf(item.record, statusField))).length : 0;
-    return { done, open: records.length - done, thisMonth, lastMonth, upcoming, overdue };
+    const overdue = statusField ? dated.filter((item) => item.date < today && isOpen(item.record)).length : 0;
+    return { done, open, thisMonth, lastMonth, upcoming, overdue };
   }, [records, dated, statusField, monthKey, lastMonthKey, today]);
 
   const workload = useMemo(() => {
@@ -152,22 +164,22 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
     {
       label: t("pmViews.dashRecords", { defaultValue: "Records" }), value: records.length,
       note: dateField ? t("pmViews.dashThisMonth", { defaultValue: "{{count}} this month", count: stats.thisMonth }) : "",
-      tone: delta >= 0 ? "text-emerald-700" : "text-muted-foreground",
+      tone: delta >= 0 ? ACCENT.green : undefined,
     },
     {
       label: t("pmViews.dashUpcoming", { defaultValue: "Coming up" }), value: stats.upcoming.length,
       note: stats.upcoming[0] ? t("pmViews.dashNext", { defaultValue: "Next on {{date}}", date: formatDate(stats.upcoming[0].date) }) : t("pmViews.dashNothing", { defaultValue: "Nothing scheduled" }),
-      tone: "text-blue-700",
+      tone: ACCENT.blue,
     },
     {
-      label: t("pmViews.dashOpen", { defaultValue: "Not done" }), value: statusField ? stats.open : "–",
+      label: t("pmViews.dashOpen", { defaultValue: "Open" }), value: statusField ? stats.open : "–",
       note: statusField && dateField ? t("pmViews.dashOverdue", { defaultValue: "{{count}} past their date", count: stats.overdue }) : "",
-      tone: stats.overdue ? "text-orange-700" : "text-muted-foreground",
+      tone: stats.overdue ? ACCENT.orange : undefined,
     },
     {
       label: t("pmViews.dashDone", { defaultValue: "Done" }), value: statusField ? stats.done : "–",
       note: statusField && records.length ? t("pmViews.dashShare", { defaultValue: "{{percent}}% of all", percent: Math.round((stats.done / records.length) * 100) }) : "",
-      tone: "text-emerald-700",
+      tone: ACCENT.green,
     },
   ];
 
@@ -202,7 +214,7 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
             <div key={card.label} className="rounded-xl border border-border bg-card px-4 py-3.5">
               <p className="text-xs text-muted-foreground">{card.label}</p>
               <p className="edgeever-display mt-1.5 text-[28px] font-semibold leading-none tabular-nums text-foreground">{card.value}</p>
-              {card.note && <p className={`mt-1.5 truncate text-xs ${card.tone}`}>{card.note}</p>}
+              {card.note && <p className="mt-1.5 truncate text-xs text-muted-foreground" style={card.tone ? { color: card.tone } : undefined}>{card.note}</p>}
             </div>
           ))}
         </div>
@@ -214,11 +226,11 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
                 <Plus className="size-3.5" /> {t("pmViews.dashNew", { defaultValue: "New" })}
               </Button>
             )}>
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 xl:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2">
               {workload.map((item) => (
-                <div key={item.label} className="flex min-w-0 items-center gap-3 bg-card px-3 py-2.5">
+                <div key={item.label} className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums text-foreground"
-                    style={{ border: `3px ${WAITING.test(item.label) ? "dashed" : "solid"} ${item.count ? item.color : "hsl(var(--border))"}` }}>
+                    style={{ border: `3px ${WAITING.test(item.label) || PARKED.test(item.label) ? "dashed" : "solid"} ${item.count ? item.color : "hsl(var(--border))"}` }}>
                     {item.count}
                   </span>
                   <span className="min-w-0 truncate text-sm font-medium text-foreground">{item.label}</span>
@@ -249,7 +261,7 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
                   <div key={month.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
                     <span className="text-[10px] tabular-nums text-muted-foreground">{month.count || ""}</span>
                     <div className="w-full max-w-8 rounded-t-[5px]"
-                      style={month.count ? { height: `${Math.max(3, month.height * 0.82)}%`, ...hatch(month.current ? ACCENT.orange : month.future ? "#93B4F5" : ACCENT.blue) } : { height: 2, ...HATCH_TRACK }} />
+                      style={month.count ? { height: `${Math.max(3, month.height * 0.82)}%`, ...hatch(month.current ? ACCENT.orange : month.future ? "color-mix(in srgb, var(--edgeever-chart-1, #2563EB) 45%, white)" : ACCENT.blue) } : { height: 2, ...HATCH_TRACK }} />
                   </div>
                 ))}
               </div>
@@ -268,7 +280,7 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
                 <div className="flex rounded-md border border-border p-0.5 text-xs" role="group" aria-label={t("pmViews.dashScope", { defaultValue: "Range" })}>
                   {(["year", "all"] as const).map((scope) => (
                     <button key={scope} type="button" aria-pressed={breakdownScope === scope} onClick={() => setBreakdownScope(scope)}
-                      className={`rounded px-2 py-1 ${breakdownScope === scope ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}>
+                      className={`rounded px-2 py-1 ${breakdownScope === scope ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                       {scope === "year" ? year : t("pmViews.dashAll", { defaultValue: "All" })}
                     </button>
                   ))}

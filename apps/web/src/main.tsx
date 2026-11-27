@@ -13,6 +13,7 @@ import { installDesktopClipboardBridge } from "./lib/clipboard";
 import { applyEditorBodyFontPreference } from "./lib/editor-body-font";
 import { installEditorBodyFontFaces } from "./lib/editor-body-font-faces";
 import { applyUiFontPreference } from "./lib/ui-font";
+import { applyColorScheme } from "./lib/color-schemes";
 import { DesktopRendererErrorBoundary } from "./components/DesktopRendererErrorBoundary";
 import { reportDesktopRendererReadyAfterPaint } from "./lib/desktop-renderer-ready";
 import "./styles/globals.css";
@@ -127,6 +128,7 @@ const mountApp = () => {
   installEditorBodyFontFaces();
   applyEditorBodyFontPreference();
   applyUiFontPreference();
+  applyColorScheme();
   const Router = isDesktopRenderer ? HashRouter : BrowserRouter;
 
   createRoot(root, {

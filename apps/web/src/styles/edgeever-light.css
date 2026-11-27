@@ -1,7 +1,8 @@
 /*
  * EdgeEver light refresh (fork customization).
- * Brighter canvas, hairline borders, Inter for the interface and Lexend for
- * display headings. It only applies to the built-in light appearance: dark
+ * Inter for the interface and Lexend for display headings. Colours come from
+ * the light colour schemes in lib/color-schemes.ts; the "classic" scheme turns
+ * all of this off. It only applies to the built-in light appearance: dark
  * mode and extension themes keep their own values, and editor themes that set
  * a heading font still win because the heading rules below have zero
  * specificity.
@@ -49,39 +50,16 @@
   letter-spacing: -0.01em;
 }
 
-:root:not(.dark):not([data-edgeever-extension-theme]) {
+:root[data-color-scheme]:not([data-color-scheme="classic"]):not(.dark):not([data-edgeever-extension-theme]) {
   --edgeever-system-font-family: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-
-  --background: 220 14% 97%;
-  --foreground: 222 14% 9%;
-  --card-foreground: 222 14% 9%;
-  --popover-foreground: 222 14% 9%;
-  --primary: 222 14% 9%;
-  --secondary: 220 14% 96%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 8% 39%;
-  --accent: 220 14% 93%;
-  --border: 220 13% 91%;
-  --input: 220 13% 88%;
-  --ring: 221 83% 53%;
-
-  --workspace-canvas: #f4f5f7;
-  --workspace-sidebar: #f8f9fb;
-  --workspace-memo-list: #fbfbfc;
-  --workspace-editor: #ffffff;
-  --workspace-divider: #e6e8ec;
-  --workspace-memo-divider: #eceef2;
-  --workspace-selection: #e9eefc;
-  --workspace-hover: #eef0f4;
-  --tooltip-border: #e6e8ec;
 }
 
-:root:not(.dark):not([data-edgeever-extension-theme]) body {
+:root[data-color-scheme]:not([data-color-scheme="classic"]):not(.dark):not([data-edgeever-extension-theme]) body {
   font-family: var(--ui-font-family, var(--edgeever-system-font-family));
   font-feature-settings: "cv11", "ss01";
 }
 
-:root:not(.dark):not([data-edgeever-extension-theme]) :where(.ProseMirror) :where(h1, h2, h3) {
+:root[data-color-scheme]:not([data-color-scheme="classic"]):not(.dark):not([data-edgeever-extension-theme]) :where(.ProseMirror) :where(h1, h2, h3) {
   font-family: var(--edgeever-display-font);
   letter-spacing: -0.01em;
 }
