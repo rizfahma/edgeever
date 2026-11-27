@@ -49,6 +49,8 @@ export type NamedTableView = {
   endDateFieldId?: string;
   /** Dashboard: second select field broken down as bars (for example Workstream). */
   breakdownFieldId?: string;
+  /** Dashboard: optional number field charted over time (for example a weekly score). */
+  valueFieldId?: string;
 };
 
 /**
@@ -56,7 +58,7 @@ export type NamedTableView = {
  * A stale reference (field deleted or retyped) falls back to the first
  * suitable field rather than invalidating the whole view.
  */
-export const normalizeTableViewLayout = (view: Record<string, unknown>, fields: TableField[]): Pick<NamedTableView, "layout" | "groupFieldId" | "dateFieldId" | "endDateFieldId" | "breakdownFieldId"> => {
+export const normalizeTableViewLayout = (view: Record<string, unknown>, fields: TableField[]): Pick<NamedTableView, "layout" | "groupFieldId" | "dateFieldId" | "endDateFieldId" | "breakdownFieldId" | "valueFieldId"> => {
   const layout = view.layout;
   if (layout !== "board" && layout !== "calendar" && layout !== "timeline" && layout !== "dashboard") return {};
   const ofType = (type: TableField["type"], id: unknown) =>
@@ -72,9 +74,10 @@ export const normalizeTableViewLayout = (view: Record<string, unknown>, fields: 
     const breakdownFieldId = selects.find((field) => field.id === view.breakdownFieldId && field.id !== groupFieldId)?.id
       ?? (view.breakdownFieldId === undefined ? undefined : selects.find((field) => field.id !== groupFieldId)?.id);
     const dateFieldId = ofType("date", view.dateFieldId);
+    const valueFieldId = fields.find((field) => field.id === view.valueFieldId && field.type === "number")?.id;
     return {
       layout, ...(groupFieldId ? { groupFieldId } : {}), ...(dateFieldId ? { dateFieldId } : {}),
-      ...(breakdownFieldId ? { breakdownFieldId } : {}),
+      ...(breakdownFieldId ? { breakdownFieldId } : {}), ...(valueFieldId ? { valueFieldId } : {}),
     };
   }
   const dateFieldId = ofType("date", view.dateFieldId);

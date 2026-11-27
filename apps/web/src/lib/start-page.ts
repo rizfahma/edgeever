@@ -37,8 +37,9 @@ export const writeStartPage = (page: StartPage | null) => {
  * The selection to start with on a plain workspace load ("/" with no query),
  * or null when another route, a restore, or no start page applies.
  */
-export const initialStartPageSelection = (pathname: string, search: string) => {
-  if (pathname !== "/" || search) return null;
+export const initialStartPageSelection = (pathname: string, search: string, hash = "") => {
+  // Note links (#memo=…) and any other route win over the start page.
+  if (pathname !== "/" || search || /memo=/.test(hash)) return null;
   const page = readStartPage();
   return page ? { selectedMemoId: page.memoId, selectedNotebookId: page.notebookId } : null;
 };

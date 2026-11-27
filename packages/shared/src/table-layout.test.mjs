@@ -80,4 +80,17 @@ describe("table view layouts", () => {
     expect(views[3]).toMatchObject({ layout: "dashboard", groupFieldId: "fld_status" });
     expect(views[3].breakdownFieldId).toBeUndefined();
   });
+
+  test("dashboard keeps a number metric and drops one that is not a number", () => {
+    let document = addTableField(createDefaultTableDocument(), { id: "fld_score", name: "Score", type: "number" });
+    const [initial] = getTableViews(document);
+    const saved = saveTableViews(document, [
+      initial,
+      { id: "dash", name: "Dashboard", match: "all", filters: [], sorts: [], layout: "dashboard", valueFieldId: "fld_score" },
+      { id: "bad", name: "Bad", match: "all", filters: [], sorts: [], layout: "dashboard", valueFieldId: "fld_name" },
+    ]);
+    const views = parseTableDocument(serializeTableDocument(saved)).views;
+    expect(views[1].valueFieldId).toBe("fld_score");
+    expect(views[2].valueFieldId).toBeUndefined();
+  });
 });

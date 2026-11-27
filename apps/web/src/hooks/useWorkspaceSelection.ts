@@ -6,7 +6,7 @@ export const useWorkspaceSelection = (initial?: {
   selectedNotebookId?: string | null;
 } | null) => {
   // Fork: without a desktop restore, a plain load opens the chosen start page.
-  const [start] = useState(() => initial ?? (typeof window === "undefined" ? null : initialStartPageSelection(window.location.pathname, window.location.search)));
+  const [start] = useState(() => initial ?? (typeof window === "undefined" ? null : initialStartPageSelection(window.location.pathname, window.location.search, window.location.hash)));
   const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(start?.selectedNotebookId ?? null);
   const [selectedMemoId, setSelectedMemoId] = useState<string | null>(start?.selectedMemoId ?? null);
   const selectedMemoIdRef = useRef(selectedMemoId);

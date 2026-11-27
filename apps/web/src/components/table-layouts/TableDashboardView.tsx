@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { NamedTableView, TableDocument, TableField, TableRecord } from "@edgeever/shared";
 import { Button } from "@/components/ui/button";
@@ -74,12 +74,29 @@ function Panel({ title, subtitle, action, children, className = "" }: {
   );
 }
 
-export function TableDashboardView({ document, records, view, readOnly, onOpenRecord, onAddRecord }: Props) {
+type Focus = { fieldId: string; value: string };
+const LIST_PAGE = 15;
+
+export function TableDashboardView({ document, records: allRecords, view, readOnly, onOpenRecord, onAddRecord }: Props) {
   const { t, i18n } = useTranslation();
   const statusField = document.fields.find((field) => field.id === view.groupFieldId && field.type === "select");
   const dateField = document.fields.find((field) => field.id === view.dateFieldId && field.type === "date")
     ?? document.fields.find((field) => field.type === "date");
-  const breakdownField = document.fields.find((field) => field.id === view.breakdownFieldId && field.type === "select");
+  const viewBreakdownField = document.fields.find((field) => field.id === view.breakdownFieldId && field.type === "select");
+  const valueField = document.fields.find((field) => field.id === view.valueFieldId && field.type === "number");
+  // Clicking a status or a breakdown row focuses the whole dashboard on it:
+  // every card, chart and list then describes just those records.
+  const [focus, setFocus] = useState<Focus | null>(null);
+  const [listLimit, setListLimit] = useState(LIST_PAGE);
+  const focusField = focus ? document.fields.find((field) => field.id === focus.fieldId) : undefined;
+  const records = useMemo(() => (focus && focusField
+    ? allRecords.filter((record) => textOf(record, focusField) === focus.value)
+    : allRecords), [allRecords, focus, focusField]);
+  const focusOn = (fieldId: string, value: string) => { setFocus({ fieldId, value }); setListLimit(LIST_PAGE); };
+  // Focused on the breakdown itself, break the slice down by the next pick-list column instead.
+  const breakdownField = focus && viewBreakdownField && focus.fieldId === viewBreakdownField.id
+    ? document.fields.find((field) => field.type === "select" && field.id !== statusField?.id && field.id !== viewBreakdownField.id)
+    : viewBreakdownField;
   const today = todayIso();
   const monthKey = today.slice(0, 7);
   const lastMonthKey = (() => {
@@ -151,13 +168,33 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
     return rows.map(([label, count], index) => ({ label, count, width: Math.max(3, Math.round((count / max) * 100)), lead: index === 0 }));
   }, [breakdownField, breakdownScope, dateField, records, dated, year]);
 
-  const recent = useMemo(() => (dateField
-    ? dated.filter((item) => item.date <= today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6)
-    : records.slice(0, 6).map((record) => ({ record, date: "" }))), [dated, dateField, records, today]);
+  const recentLimit = focus ? listLimit : 6;
+  const recentAll = useMemo(() => (dateField
+    ? dated.filter((item) => item.date <= today).sort((a, b) => b.date.localeCompare(a.date))
+    : records.map((record) => ({ record, date: "" }))), [dated, dateField, records, today]);
+  const recent = recentAll.slice(0, recentLimit);
+
+  const metric = useMemo(() => {
+    if (!valueField) return null;
+    const points = dated
+      .map((item) => ({ ...item, value: item.record.cells[valueField.id] }))
+      .filter((item): item is { record: TableRecord; date: string; value: number } => typeof item.value === "number" && Number.isFinite(item.value))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!points.length) return { points: [], latest: null, previous: null, average: null, min: 0, max: 0 };
+    const shown = points.slice(-16);
+    const values = shown.map((point) => point.value);
+    const min = Math.min(0, ...values);
+    const max = Math.max(...values, min + 1);
+    return {
+      points: shown, latest: points.at(-1)!, previous: points.at(-2) ?? null,
+      average: values.reduce((sum, value) => sum + value, 0) / values.length, min, max,
+    };
+  }, [valueField, dated]);
   const upcoming = stats.upcoming.slice(0, 6);
 
   const formatDate = (iso: string) => (iso ? fromIso(iso).toLocaleDateString(i18n.language, { day: "numeric", month: "short", year: iso.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric" }) : "");
   const untitled = t("pmViews.untitled", { defaultValue: "Untitled" });
+  const formatNumber = (value: number) => value.toLocaleString(i18n.language, { maximumFractionDigits: 2 });
   const delta = stats.thisMonth - stats.lastMonth;
 
   const cards = [
@@ -209,6 +246,56 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
   return (
     <div className="edgeever-dashboard min-h-0 flex-1 overflow-y-auto bg-muted/20">
       <div className="mx-auto flex max-w-[1240px] flex-col gap-4 p-4 sm:p-5">
+        {focus && focusField && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setFocus(null)}>
+              <ArrowLeft className="size-3.5" /> {t("pmViews.dashBack", { defaultValue: "Whole table" })}
+            </Button>
+            <span className="text-sm text-muted-foreground">{focusField.name}</span>
+            <span className={`rounded-full border px-2.5 py-0.5 text-sm font-medium ${layoutStatusTone(focus.value)}`}>{focus.value}</span>
+            <span className="text-sm tabular-nums text-muted-foreground">
+              {t("pmViews.dashFocusCount", { defaultValue: "{{count}} records", count: records.length })}
+            </span>
+            <Button type="button" size="icon" variant="ghost" className="ml-auto size-8"
+              aria-label={t("pmViews.dashClearFocus", { defaultValue: "Show the whole table" })} onClick={() => setFocus(null)}>
+              <X className="size-4" />
+            </Button>
+          </div>
+        )}
+        {metric && valueField && (
+          <Panel title={t("pmViews.dashMetric", { defaultValue: "{{field}} over time", field: valueField.name })}
+            subtitle={metric.latest ? t("pmViews.dashMetricNote", { defaultValue: "Latest {{value}} on {{date}} · average {{average}}", value: formatNumber(metric.latest.value), date: formatDate(metric.latest.date), average: formatNumber(metric.average ?? 0) }) : undefined}
+            action={metric.latest && metric.previous ? (
+              <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium tabular-nums"
+                style={{ color: metric.latest.value >= metric.previous.value ? ACCENT.green : ACCENT.orange }}>
+                {metric.latest.value >= metric.previous.value ? "▲" : "▼"} {formatNumber(Math.abs(metric.latest.value - metric.previous.value))}
+              </span>
+            ) : undefined}>
+            {metric.points.length ? (
+              <>
+                <div className="flex h-40 items-end gap-1.5 border-b border-border" role="img"
+                  aria-label={metric.points.map((point) => `${point.date} ${point.value}`).join(", ")}>
+                  {metric.points.map((point, index) => (
+                    <button key={point.record.id} type="button" onClick={() => onOpenRecord(point.record.id)}
+                      aria-label={`${formatDate(point.date)}: ${formatNumber(point.value)}`}
+                      className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1 outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <span className="text-[10px] tabular-nums text-muted-foreground">{formatNumber(point.value)}</span>
+                      <span className="w-full max-w-9 rounded-t-[5px]"
+                        style={{ height: `${Math.max(3, ((point.value - metric.min) / (metric.max - metric.min)) * 80)}%`, ...hatch(index === metric.points.length - 1 ? ACCENT.orange : ACCENT.blue) }} />
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-1.5 flex gap-1.5">
+                  {metric.points.map((point) => (
+                    <span key={point.record.id} className="min-w-0 flex-1 truncate text-center text-[10px] text-muted-foreground">
+                      {fromIso(point.date).toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : <p className="py-6 text-center text-sm text-muted-foreground">{t("pmViews.dashMetricEmpty", { defaultValue: "No values yet. Add a record with a date and a number." })}</p>}
+          </Panel>
+        )}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {cards.map((card) => (
             <div key={card.label} className="rounded-xl border border-border bg-card px-4 py-3.5">
@@ -228,13 +315,15 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
             )}>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2">
               {workload.map((item) => (
-                <div key={item.label} className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+                <button key={item.label} type="button" onClick={() => focusOn(statusField.id, item.label)}
+                  aria-pressed={focus?.fieldId === statusField.id && focus.value === item.label}
+                  className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left outline-none transition-colors hover:border-foreground/30 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-foreground">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums text-foreground"
                     style={{ border: `3px ${WAITING.test(item.label) || PARKED.test(item.label) ? "dashed" : "solid"} ${item.count ? item.color : "hsl(var(--border))"}` }}>
                     {item.count}
                   </span>
                   <span className="min-w-0 truncate text-sm font-medium text-foreground">{item.label}</span>
-                </div>
+                </button>
               ))}
             </div>
           </Panel>
@@ -289,12 +378,16 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
               {breakdown.length ? (
                 <ul className="flex flex-col gap-2.5">
                   {breakdown.map((row) => (
-                    <li key={row.label} className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_2.25rem] items-center gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
+                    <li key={row.label}>
+                      <button type="button" onClick={() => focusOn(breakdownField.id, row.label)}
+                        aria-label={t("pmViews.dashOpenSlice", { defaultValue: "Show {{value}}", value: row.label })}
+                        className="grid w-full grid-cols-[minmax(0,10rem)_minmax(0,1fr)_2.25rem] items-center gap-3 rounded-md px-1 py-0.5 text-left text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring">
+                      <span className="truncate text-foreground underline-offset-2 group-hover:underline">{row.label}</span>
                       <span className="h-3.5 overflow-hidden rounded" style={HATCH_TRACK}>
                         <span className="block h-full rounded" style={{ width: `${row.width}%`, ...hatch(row.lead ? ACCENT.orange : ACCENT.blue) }} />
                       </span>
                       <span className="text-right font-medium tabular-nums">{row.count}</span>
+                    </button>
                     </li>
                   ))}
                 </ul>
@@ -307,7 +400,16 @@ export function TableDashboardView({ document, records, view, readOnly, onOpenRe
           <Panel title={t("pmViews.dashRecent", { defaultValue: "Recent" })}
             subtitle={dateField ? t("pmViews.dashRecentNote", { defaultValue: "Latest by {{field}}", field: dateField.name }) : undefined}>
             {recent.length
-              ? <ol className="-mx-2 flex flex-col">{recent.map((item) => recordRow(item, true))}</ol>
+              ? (
+                <>
+                  <ol className="-mx-2 flex flex-col">{recent.map((item) => recordRow(item, true))}</ol>
+                  {focus && recentAll.length > recent.length && (
+                    <Button type="button" variant="ghost" size="sm" className="mt-1 w-full" onClick={() => setListLimit((limit) => limit + LIST_PAGE)}>
+                      {t("pmViews.showMore", { defaultValue: "Show {{count}} more", count: Math.min(LIST_PAGE, recentAll.length - recent.length) })}
+                    </Button>
+                  )}
+                </>
+              )
               : <p className="py-6 text-center text-sm text-muted-foreground">{t("pmViews.dashEmpty", { defaultValue: "No records here yet." })}</p>}
           </Panel>
           {dateField && (

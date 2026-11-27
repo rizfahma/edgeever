@@ -15,19 +15,20 @@ type Mode = "filter" | "sort" | "new" | "copy" | "rename" | "delete" | "layout";
 
 const LAYOUT_ICONS: Record<TableViewLayout, LucideIcon> = { table: Table2, board: SquareKanban, calendar: CalendarDays, timeline: GanttChart, dashboard: LayoutDashboard };
 const LAYOUT_LABELS: Record<TableViewLayout, string> = { table: "Table", board: "Board", calendar: "Calendar", timeline: "Timeline", dashboard: "Dashboard" };
-type LayoutDraft = { layout: TableViewLayout; groupFieldId?: string; dateFieldId?: string; endDateFieldId?: string; breakdownFieldId?: string };
+type LayoutDraft = { layout: TableViewLayout; groupFieldId?: string; dateFieldId?: string; endDateFieldId?: string; breakdownFieldId?: string; valueFieldId?: string };
 const layoutOf = (view: NamedTableView): LayoutDraft => ({
   layout: view.layout ?? "table", groupFieldId: view.groupFieldId, dateFieldId: view.dateFieldId, endDateFieldId: view.endDateFieldId,
-  breakdownFieldId: view.breakdownFieldId,
+  breakdownFieldId: view.breakdownFieldId, valueFieldId: view.valueFieldId,
 });
 /** Merge layout settings into a view; "table" removes them entirely. */
 const withLayout = (view: NamedTableView, draft: LayoutDraft): NamedTableView => {
-  const { layout: _layout, groupFieldId: _group, dateFieldId: _date, endDateFieldId: _end, breakdownFieldId: _breakdown, ...rest } = view;
+  const { layout: _layout, groupFieldId: _group, dateFieldId: _date, endDateFieldId: _end, breakdownFieldId: _breakdown, valueFieldId: _value, ...rest } = view;
   if (draft.layout === "table") return rest;
   return {
     ...rest, layout: draft.layout,
     ...((draft.layout === "board" || draft.layout === "dashboard") && draft.groupFieldId ? { groupFieldId: draft.groupFieldId } : {}),
     ...(draft.layout === "dashboard" && draft.breakdownFieldId && draft.breakdownFieldId !== draft.groupFieldId ? { breakdownFieldId: draft.breakdownFieldId } : {}),
+    ...(draft.layout === "dashboard" && draft.valueFieldId ? { valueFieldId: draft.valueFieldId } : {}),
     ...(draft.layout !== "board" && draft.dateFieldId ? { dateFieldId: draft.dateFieldId } : {}),
     ...(draft.layout === "timeline" && draft.endDateFieldId && draft.endDateFieldId !== draft.dateFieldId ? { endDateFieldId: draft.endDateFieldId } : {}),
   };
@@ -228,6 +229,9 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
                 {selectFields.length > 1 && fieldSelect(t("pmViews.dashBreakdownField", { defaultValue: "Break down by" }), layout.breakdownFieldId,
                   selectFields.filter((field) => field.id !== layout.groupFieldId),
                   (id) => setLayout((current) => ({ ...current, breakdownFieldId: id })), t("pmViews.none", { defaultValue: "None" }))}
+                {fields.some((field) => field.type === "number") && fieldSelect(t("pmViews.dashMetricField", { defaultValue: "Chart a number" }), layout.valueFieldId,
+                  fields.filter((field) => field.type === "number"),
+                  (id) => setLayout((current) => ({ ...current, valueFieldId: id })), t("pmViews.none", { defaultValue: "None" }))}
               </div>
             )}
             {(layout.layout === "calendar" || layout.layout === "timeline") && (dateFields.length ? (

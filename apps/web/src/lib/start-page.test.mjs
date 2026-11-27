@@ -21,6 +21,7 @@ describe("start page", () => {
     expect(initialStartPageSelection("/", "")).toEqual({ selectedMemoId: "memo_a", selectedNotebookId: "nb_a" });
     expect(initialStartPageSelection("/settings", "")).toBeNull();
     expect(initialStartPageSelection("/", "?view=trash")).toBeNull();
+    expect(initialStartPageSelection("/", "", "#memo=memo_b")).toBeNull();
   });
 
   test("clearing or corrupt storage falls back to no start page", () => {
