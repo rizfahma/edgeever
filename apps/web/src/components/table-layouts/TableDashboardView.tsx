@@ -176,11 +176,20 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
 
   const metric = useMemo(() => {
     if (!valueField) return null;
-    const points = dated
-      .map((item) => ({ ...item, value: item.record.cells[valueField.id] }))
-      .filter((item): item is { record: TableRecord; date: string; value: number } => typeof item.value === "number" && Number.isFinite(item.value))
+    // One point per date: records that share a date (several stages of the
+    // same week, say) are averaged, so a focused slice shows its own line.
+    const byDate = new Map<string, { record: TableRecord; date: string; total: number; count: number }>();
+    for (const item of dated) {
+      const value = item.record.cells[valueField.id];
+      if (typeof value !== "number" || !Number.isFinite(value)) continue;
+      const point = byDate.get(item.date);
+      if (point) { point.total += value; point.count += 1; }
+      else byDate.set(item.date, { record: item.record, date: item.date, total: value, count: 1 });
+    }
+    const points = [...byDate.values()]
+      .map((point) => ({ record: point.record, date: point.date, value: Math.round((point.total / point.count) * 100) / 100, count: point.count }))
       .sort((a, b) => a.date.localeCompare(b.date));
-    if (!points.length) return { points: [], latest: null, previous: null, average: null, min: 0, max: 0 };
+    if (!points.length) return { points: [], latest: null, previous: null, average: null, min: 0, max: 0, averaged: false };
     const shown = points.slice(-16);
     const values = shown.map((point) => point.value);
     const min = Math.min(0, ...values);
@@ -188,6 +197,7 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
     return {
       points: shown, latest: points.at(-1)!, previous: points.at(-2) ?? null,
       average: values.reduce((sum, value) => sum + value, 0) / values.length, min, max,
+      averaged: shown.some((point) => point.count > 1),
     };
   }, [valueField, dated]);
   const upcoming = stats.upcoming.slice(0, 6);
@@ -264,7 +274,10 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
         )}
         {metric && valueField && (
           <Panel title={t("pmViews.dashMetric", { defaultValue: "{{field}} over time", field: valueField.name })}
-            subtitle={metric.latest ? t("pmViews.dashMetricNote", { defaultValue: "Latest {{value}} on {{date}} · average {{average}}", value: formatNumber(metric.latest.value), date: formatDate(metric.latest.date), average: formatNumber(metric.average ?? 0) }) : undefined}
+            subtitle={metric.latest ? [
+              t("pmViews.dashMetricNote", { defaultValue: "Latest {{value}} on {{date}} · average {{average}}", value: formatNumber(metric.latest.value), date: formatDate(metric.latest.date), average: formatNumber(metric.average ?? 0) }),
+              metric.averaged ? t("pmViews.dashMetricAveraged", { defaultValue: "records on the same date are averaged; click a row on the right to see one" }) : "",
+            ].filter(Boolean).join(" · ") : undefined}
             action={metric.latest && metric.previous ? (
               <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium tabular-nums"
                 style={{ color: metric.latest.value >= metric.previous.value ? ACCENT.green : ACCENT.orange }}>
