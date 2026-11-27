@@ -141,6 +141,7 @@ import {
   shouldRestoreDesktopWorkspace,
   writeDesktopWorkspaceRestoreState,
 } from "@/lib/desktop-workspace-restore";
+import { initialStartPageSelection } from "@/lib/start-page";
 import { EditorPaneErrorBoundary, EditorRecoveryPane } from "./EditorPaneErrorBoundary";
 import { NoteInSeparateWindowPane } from "./NoteInSeparateWindowPane";
 import { canOpenNoteWindows, noteWindowSyncUpdate, useDetachedMemoIds, type NoteWindowSyncCompletedDetail } from "@/lib/desktop-note-windows";
@@ -227,7 +228,10 @@ export const WorkspaceApp = ({
       ? readDesktopWorkspaceRestoreState()
       : null
   ));
-  const [activePane, setActivePane] = useState<Pane>(() => ((isInitialSettingsRoute || isInitialPluginsRoute || isInitialTemplatesRoute || isInitialAiPromptsRoute || isInitialExecutionCenterRoute) && !isInitialMobileEditorReturn ? "editor" : "memos"));
+  // Fork: a start page opens straight into the note, also on a phone.
+  const [opensStartPage] = useState(() => !desktopWorkspaceRestore
+    && Boolean(initialStartPageSelection(window.location.pathname, window.location.search, window.location.hash)));
+  const [activePane, setActivePane] = useState<Pane>(() => opensStartPage ? "editor" : ((isInitialSettingsRoute || isInitialPluginsRoute || isInitialTemplatesRoute || isInitialAiPromptsRoute || isInitialExecutionCenterRoute) && !isInitialMobileEditorReturn ? "editor" : "memos"));
   const [memoView, setMemoView] = useState<MemoView>(() => (
     isTrashRoute ? "trash" : desktopWorkspaceRestore?.memoView ?? "notebook"
   ));

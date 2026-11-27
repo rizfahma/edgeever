@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { NamedTableView, TableDocument, TableField, TableRecord } from "@edgeever/shared";
@@ -92,7 +92,12 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
   const records = useMemo(() => (focus && focusField
     ? allRecords.filter((record) => textOf(record, focusField) === focus.value)
     : allRecords), [allRecords, focus, focusField]);
-  const focusOn = (fieldId: string, value: string) => { setFocus({ fieldId, value }); setListLimit(LIST_PAGE); };
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const focusOn = (fieldId: string, value: string) => {
+    setFocus({ fieldId, value });
+    setListLimit(LIST_PAGE);
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
   // Focused on the breakdown itself, break the slice down by the next pick-list column instead.
   const breakdownField = focus && viewBreakdownField && focus.fieldId === viewBreakdownField.id
     ? document.fields.find((field) => field.type === "select" && field.id !== statusField?.id && field.id !== viewBreakdownField.id)
@@ -254,7 +259,7 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
   };
 
   return (
-    <div className="edgeever-dashboard min-h-0 flex-1 overflow-y-auto bg-muted/20">
+    <div ref={scrollRef} className="edgeever-dashboard min-h-0 flex-1 overflow-y-auto bg-muted/20">
       <div className="mx-auto flex max-w-[1240px] flex-col gap-4 p-4 sm:p-5">
         {focus && focusField && (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
@@ -276,7 +281,7 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
           <Panel title={t("pmViews.dashMetric", { defaultValue: "{{field}} over time", field: valueField.name })}
             subtitle={metric.latest ? [
               t("pmViews.dashMetricNote", { defaultValue: "Latest {{value}} on {{date}} · average {{average}}", value: formatNumber(metric.latest.value), date: formatDate(metric.latest.date), average: formatNumber(metric.average ?? 0) }),
-              metric.averaged ? t("pmViews.dashMetricAveraged", { defaultValue: "records on the same date are averaged; click a row on the right to see one" }) : "",
+              metric.averaged ? t("pmViews.dashMetricAveraged", { defaultValue: "records on the same date are averaged; pick a row in the breakdown to see one" }) : "",
             ].filter(Boolean).join(" · ") : undefined}
             action={metric.latest && metric.previous ? (
               <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium tabular-nums"
@@ -326,7 +331,7 @@ export function TableDashboardView({ document, records: allRecords, view, readOn
                 <Plus className="size-3.5" /> {t("pmViews.dashNew", { defaultValue: "New" })}
               </Button>
             )}>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] gap-2">
               {workload.map((item) => (
                 <button key={item.label} type="button" onClick={() => focusOn(statusField.id, item.label)}
                   aria-pressed={focus?.fieldId === statusField.id && focus.value === item.label}
