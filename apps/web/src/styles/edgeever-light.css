@@ -1,0 +1,87 @@
+/*
+ * EdgeEver light refresh (fork customization).
+ * Brighter canvas, hairline borders, Inter for the interface and Lexend for
+ * display headings. It only applies to the built-in light appearance: dark
+ * mode and extension themes keep their own values, and editor themes that set
+ * a heading font still win because the heading rules below have zero
+ * specificity.
+ */
+
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fonts/inter-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Lexend Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fonts/lexend-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Lexend Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fonts/lexend-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --edgeever-display-font: "Lexend Variable", "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+
+.edgeever-display {
+  font-family: var(--edgeever-display-font);
+  letter-spacing: -0.01em;
+}
+
+:root:not(.dark):not([data-edgeever-extension-theme]) {
+  --edgeever-system-font-family: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+  --background: 220 14% 97%;
+  --foreground: 222 14% 9%;
+  --card-foreground: 222 14% 9%;
+  --popover-foreground: 222 14% 9%;
+  --primary: 222 14% 9%;
+  --secondary: 220 14% 96%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 8% 39%;
+  --accent: 220 14% 93%;
+  --border: 220 13% 91%;
+  --input: 220 13% 88%;
+  --ring: 221 83% 53%;
+
+  --workspace-canvas: #f4f5f7;
+  --workspace-sidebar: #f8f9fb;
+  --workspace-memo-list: #fbfbfc;
+  --workspace-editor: #ffffff;
+  --workspace-divider: #e6e8ec;
+  --workspace-memo-divider: #eceef2;
+  --workspace-selection: #e9eefc;
+  --workspace-hover: #eef0f4;
+  --tooltip-border: #e6e8ec;
+}
+
+:root:not(.dark):not([data-edgeever-extension-theme]) body {
+  font-family: var(--ui-font-family, var(--edgeever-system-font-family));
+  font-feature-settings: "cv11", "ss01";
+}
+
+:root:not(.dark):not([data-edgeever-extension-theme]) :where(.ProseMirror) :where(h1, h2, h3) {
+  font-family: var(--edgeever-display-font);
+  letter-spacing: -0.01em;
+}

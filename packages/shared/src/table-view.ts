@@ -29,7 +29,7 @@ export type TypedTableFilter = {
 export type TableViewFilter = TypedTableFilter | (TableFilter & { legacy: true });
 export type TableViewSort = TableSort & { legacy?: true };
 /** How a saved view presents its records. Missing means "table". */
-export const TABLE_VIEW_LAYOUTS = ["table", "board", "calendar", "timeline"] as const;
+export const TABLE_VIEW_LAYOUTS = ["table", "board", "calendar", "timeline", "dashboard"] as const;
 export type TableViewLayout = (typeof TABLE_VIEW_LAYOUTS)[number];
 
 export type NamedTableView = {
@@ -41,12 +41,14 @@ export type NamedTableView = {
   sorts: TableViewSort[];
   /** Board, calendar and timeline layouts. Omitted for the plain table. */
   layout?: Exclude<TableViewLayout, "table">;
-  /** Board: select field whose options become the columns. */
+  /** Board: select field whose options become the columns. Dashboard: the status field. */
   groupFieldId?: string;
-  /** Calendar and timeline: date field that places a record. */
+  /** Calendar, timeline and dashboard: date field that places a record. */
   dateFieldId?: string;
   /** Timeline: optional end date field; bars are one day long without it. */
   endDateFieldId?: string;
+  /** Dashboard: second select field broken down as bars (for example Workstream). */
+  breakdownFieldId?: string;
 };
 
 /**
@@ -54,14 +56,26 @@ export type NamedTableView = {
  * A stale reference (field deleted or retyped) falls back to the first
  * suitable field rather than invalidating the whole view.
  */
-export const normalizeTableViewLayout = (view: Record<string, unknown>, fields: TableField[]): Pick<NamedTableView, "layout" | "groupFieldId" | "dateFieldId" | "endDateFieldId"> => {
+export const normalizeTableViewLayout = (view: Record<string, unknown>, fields: TableField[]): Pick<NamedTableView, "layout" | "groupFieldId" | "dateFieldId" | "endDateFieldId" | "breakdownFieldId"> => {
   const layout = view.layout;
-  if (layout !== "board" && layout !== "calendar" && layout !== "timeline") return {};
+  if (layout !== "board" && layout !== "calendar" && layout !== "timeline" && layout !== "dashboard") return {};
   const ofType = (type: TableField["type"], id: unknown) =>
     fields.find((field) => field.id === id && field.type === type)?.id ?? fields.find((field) => field.type === type)?.id;
   if (layout === "board") {
     const groupFieldId = ofType("select", view.groupFieldId);
     return groupFieldId ? { layout, groupFieldId } : { layout };
+  }
+  if (layout === "dashboard") {
+    const selects = fields.filter((field) => field.type === "select");
+    const groupFieldId = selects.find((field) => field.id === view.groupFieldId)?.id
+      ?? selects.find((field) => /status|state|stage/i.test(field.name))?.id ?? selects[0]?.id;
+    const breakdownFieldId = selects.find((field) => field.id === view.breakdownFieldId && field.id !== groupFieldId)?.id
+      ?? (view.breakdownFieldId === undefined ? undefined : selects.find((field) => field.id !== groupFieldId)?.id);
+    const dateFieldId = ofType("date", view.dateFieldId);
+    return {
+      layout, ...(groupFieldId ? { groupFieldId } : {}), ...(dateFieldId ? { dateFieldId } : {}),
+      ...(breakdownFieldId ? { breakdownFieldId } : {}),
+    };
   }
   const dateFieldId = ofType("date", view.dateFieldId);
   if (layout === "calendar") return dateFieldId ? { layout, dateFieldId } : { layout };

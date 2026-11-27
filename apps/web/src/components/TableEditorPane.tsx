@@ -44,6 +44,7 @@ import { TableFormDialog } from "@/components/dialogs/TableFormDialog";
 import { TableViewControls } from "@/components/TableViewControls";
 import { TableBoardView } from "@/components/table-layouts/TableBoardView";
 import { TableCalendarView } from "@/components/table-layouts/TableCalendarView";
+import { TableDashboardView } from "@/components/table-layouts/TableDashboardView";
 import { TableRecordDialog } from "@/components/table-layouts/TableRecordDialog";
 import { TableTimelineView } from "@/components/table-layouts/TableTimelineView";
 import { newRecordDateFieldId, titleFieldId, todayIso } from "@/components/table-layouts/layout-helpers";
@@ -1154,6 +1155,9 @@ export const TableEditorPane = ({
       ) : activeView.layout === "calendar" ? (
         <TableCalendarView document={document} records={visibleRecords} view={activeView} readOnly={readOnly}
           onChange={changeDocument} onOpenRecord={setOpenRecordId} onAddRecord={addRecord} />
+      ) : activeView.layout === "dashboard" ? (
+        <TableDashboardView document={document} records={visibleRecords} view={activeView} readOnly={readOnly}
+          onOpenRecord={setOpenRecordId} onAddRecord={addRecord} />
       ) : activeView.layout === "timeline" ? (
         <TableTimelineView document={document} records={visibleRecords} view={activeView} readOnly={readOnly}
           onChange={changeDocument} onOpenRecord={setOpenRecordId} />

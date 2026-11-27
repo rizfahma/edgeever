@@ -17,6 +17,7 @@ import { DesktopRendererErrorBoundary } from "./components/DesktopRendererErrorB
 import { reportDesktopRendererReadyAfterPaint } from "./lib/desktop-renderer-ready";
 import "./styles/globals.css";
 import "./styles/editor-body-fonts.css";
+import "./styles/edgeever-light.css";
 
 installPhoneImageFillStyle();
 installDesktopClipboardBridge();

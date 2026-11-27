@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, Filter, GanttChart, MoreHorizontal, Plus, SquareKanban, Table2, X, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, Filter, GanttChart, LayoutDashboard, MoreHorizontal, Plus, SquareKanban, Table2, X, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   createTableId, isValidTypedTableFilter, tableFilterNeedsValue, TABLE_VIEW_FILTER_LIMIT, TABLE_VIEW_OPERATORS,
@@ -13,19 +13,21 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 type Mode = "filter" | "sort" | "new" | "copy" | "rename" | "delete" | "layout";
 
-const LAYOUT_ICONS: Record<TableViewLayout, LucideIcon> = { table: Table2, board: SquareKanban, calendar: CalendarDays, timeline: GanttChart };
-const LAYOUT_LABELS: Record<TableViewLayout, string> = { table: "Table", board: "Board", calendar: "Calendar", timeline: "Timeline" };
-type LayoutDraft = { layout: TableViewLayout; groupFieldId?: string; dateFieldId?: string; endDateFieldId?: string };
+const LAYOUT_ICONS: Record<TableViewLayout, LucideIcon> = { table: Table2, board: SquareKanban, calendar: CalendarDays, timeline: GanttChart, dashboard: LayoutDashboard };
+const LAYOUT_LABELS: Record<TableViewLayout, string> = { table: "Table", board: "Board", calendar: "Calendar", timeline: "Timeline", dashboard: "Dashboard" };
+type LayoutDraft = { layout: TableViewLayout; groupFieldId?: string; dateFieldId?: string; endDateFieldId?: string; breakdownFieldId?: string };
 const layoutOf = (view: NamedTableView): LayoutDraft => ({
   layout: view.layout ?? "table", groupFieldId: view.groupFieldId, dateFieldId: view.dateFieldId, endDateFieldId: view.endDateFieldId,
+  breakdownFieldId: view.breakdownFieldId,
 });
 /** Merge layout settings into a view; "table" removes them entirely. */
 const withLayout = (view: NamedTableView, draft: LayoutDraft): NamedTableView => {
-  const { layout: _layout, groupFieldId: _group, dateFieldId: _date, endDateFieldId: _end, ...rest } = view;
+  const { layout: _layout, groupFieldId: _group, dateFieldId: _date, endDateFieldId: _end, breakdownFieldId: _breakdown, ...rest } = view;
   if (draft.layout === "table") return rest;
   return {
     ...rest, layout: draft.layout,
-    ...(draft.layout === "board" && draft.groupFieldId ? { groupFieldId: draft.groupFieldId } : {}),
+    ...((draft.layout === "board" || draft.layout === "dashboard") && draft.groupFieldId ? { groupFieldId: draft.groupFieldId } : {}),
+    ...(draft.layout === "dashboard" && draft.breakdownFieldId && draft.breakdownFieldId !== draft.groupFieldId ? { breakdownFieldId: draft.breakdownFieldId } : {}),
     ...(draft.layout !== "board" && draft.dateFieldId ? { dateFieldId: draft.dateFieldId } : {}),
     ...(draft.layout === "timeline" && draft.endDateFieldId && draft.endDateFieldId !== draft.dateFieldId ? { endDateFieldId: draft.endDateFieldId } : {}),
   };
@@ -120,7 +122,7 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
   const named = mode === "new" || mode === "copy" || mode === "rename";
   const selectFields = fields.filter((field) => field.type === "select");
   const dateFields = fields.filter((field) => field.type === "date");
-  const layoutReady = layout.layout === "table" || (layout.layout === "board" ? selectFields.length > 0 : dateFields.length > 0);
+  const layoutReady = layout.layout === "table" || layout.layout === "dashboard" || (layout.layout === "board" ? selectFields.length > 0 : dateFields.length > 0);
   const valid = mode === "layout" ? layoutReady : named ? Boolean(name.trim()) && (mode !== "new" || layoutReady) : mode === "filter"
     ? filters.every(({ rule }) => {
       const field = byId.get(rule.fieldId);
@@ -168,11 +170,11 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
   const unusedSortField = fields.find((field) => !sorts.some((sort) => sort.fieldId === field.id));
   const title = mode === "layout" ? t("pmViews.layout", { defaultValue: "Layout" })
     : mode === "filter" || mode === "sort" ? t(`structuredTable.${mode}`) : t(`structuredTable.views.${mode}`);
-  const fieldSelect = (label: string, value: string | undefined, options: TableField[], onChange: (id: string | undefined) => void, optional = false) => (
+  const fieldSelect = (label: string, value: string | undefined, options: TableField[], onChange: (id: string | undefined) => void, optional: boolean | string = false) => (
     <label className="grid gap-1.5 text-sm">
       {label}
       <select className={selectClass} value={value ?? (optional ? "" : options[0]?.id ?? "")} onChange={(event) => onChange(event.target.value || undefined)}>
-        {optional && <option value="">{t("pmViews.noEndDate", { defaultValue: "None (one-day bars)" })}</option>}
+        {optional && <option value="">{typeof optional === "string" ? optional : t("pmViews.noEndDate", { defaultValue: "None (one-day bars)" })}</option>}
         {options.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}
       </select>
     </label>
@@ -193,16 +195,20 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
         )}
         {(mode === "new" || mode === "layout") && (
           <fieldset className="grid gap-3" disabled={readOnly}>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label={t("pmViews.layout", { defaultValue: "Layout" })}>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5" role="radiogroup" aria-label={t("pmViews.layout", { defaultValue: "Layout" })}>
               {(Object.keys(LAYOUT_ICONS) as TableViewLayout[]).map((item) => {
                 const Icon = LAYOUT_ICONS[item];
                 return (
                   <button key={item} type="button" role="radio" aria-checked={layout.layout === item}
-                    onClick={() => setLayout((current) => ({
-                      ...current, layout: item,
-                      groupFieldId: current.groupFieldId ?? selectFields[0]?.id,
-                      dateFieldId: current.dateFieldId ?? dateFields[0]?.id,
-                    }))}
+                    onClick={() => setLayout((current) => {
+                      const status = selectFields.find((field) => /status|state|stage/i.test(field.name)) ?? selectFields[0];
+                      const groupFieldId = current.groupFieldId ?? (item === "dashboard" ? status?.id : selectFields[0]?.id);
+                      return {
+                        ...current, layout: item, groupFieldId,
+                        dateFieldId: current.dateFieldId ?? dateFields[0]?.id,
+                        breakdownFieldId: current.breakdownFieldId ?? (item === "dashboard" ? selectFields.find((field) => field.id !== groupFieldId)?.id : undefined),
+                      };
+                    })}
                     className="flex flex-col items-center gap-1.5 rounded-md border border-border px-2 py-3 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-checked:border-foreground aria-checked:bg-muted/50 aria-checked:font-medium aria-checked:text-foreground">
                     <Icon className="size-5" aria-hidden="true" />
                     {t(`pmViews.layout_${item}`, { defaultValue: LAYOUT_LABELS[item] })}
@@ -213,6 +219,17 @@ function ViewDialog({ mode, fields, views, active, readOnly, onCommit, close, fo
             {layout.layout === "board" && (selectFields.length
               ? fieldSelect(t("pmViews.groupBy", { defaultValue: "Columns from" }), layout.groupFieldId, selectFields, (id) => setLayout((current) => ({ ...current, groupFieldId: id })))
               : <p className="text-sm text-muted-foreground">{t("pmViews.boardNeedsSelect", { defaultValue: "A board groups cards by a pick-list column. Add a select column (for example Status) to use this view." })}</p>)}
+            {layout.layout === "dashboard" && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {selectFields.length > 0 && fieldSelect(t("pmViews.dashStatusField", { defaultValue: "Status" }), layout.groupFieldId, selectFields,
+                  (id) => setLayout((current) => ({ ...current, groupFieldId: id })))}
+                {dateFields.length > 0 && fieldSelect(t("pmViews.dateField", { defaultValue: "Date" }), layout.dateFieldId, dateFields,
+                  (id) => setLayout((current) => ({ ...current, dateFieldId: id })))}
+                {selectFields.length > 1 && fieldSelect(t("pmViews.dashBreakdownField", { defaultValue: "Break down by" }), layout.breakdownFieldId,
+                  selectFields.filter((field) => field.id !== layout.groupFieldId),
+                  (id) => setLayout((current) => ({ ...current, breakdownFieldId: id })), t("pmViews.none", { defaultValue: "None" }))}
+              </div>
+            )}
             {(layout.layout === "calendar" || layout.layout === "timeline") && (dateFields.length ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {fieldSelect(t(layout.layout === "calendar" ? "pmViews.dateField" : "pmViews.startField", { defaultValue: layout.layout === "calendar" ? "Date" : "Start date" }),

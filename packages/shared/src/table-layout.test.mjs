@@ -64,4 +64,20 @@ describe("table view layouts", () => {
     expect(addTableRecord(document, "rec_last").records.map((record) => record.id)).toEqual(["rec_sample", "rec_last"]);
     expect(addTableRecord(document, "rec_first", "start").records.map((record) => record.id)).toEqual(["rec_first", "rec_sample"]);
   });
+
+  test("dashboard keeps its status, date and breakdown fields and repairs stale ones", () => {
+    const document = addTableField(createDefaultTableDocument(), { id: "fld_ws", name: "Workstream", type: "select", options: ["A", "B"] });
+    const [initial] = getTableViews(document);
+    const saved = saveTableViews(document, [
+      initial,
+      { id: "dash", name: "Dashboard", match: "all", filters: [], sorts: [], layout: "dashboard", groupFieldId: "fld_status", dateFieldId: "fld_date", breakdownFieldId: "fld_ws" },
+      { id: "stale", name: "Stale", match: "all", filters: [], sorts: [], layout: "dashboard", groupFieldId: "fld_name", breakdownFieldId: "fld_gone" },
+      { id: "plain", name: "Plain", match: "all", filters: [], sorts: [], layout: "dashboard" },
+    ]);
+    const views = parseTableDocument(serializeTableDocument(saved)).views;
+    expect(views[1]).toMatchObject({ layout: "dashboard", groupFieldId: "fld_status", dateFieldId: "fld_date", breakdownFieldId: "fld_ws" });
+    expect(views[2]).toMatchObject({ layout: "dashboard", groupFieldId: "fld_status", breakdownFieldId: "fld_ws" });
+    expect(views[3]).toMatchObject({ layout: "dashboard", groupFieldId: "fld_status" });
+    expect(views[3].breakdownFieldId).toBeUndefined();
+  });
 });
