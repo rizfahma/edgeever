@@ -246,12 +246,13 @@ export const WorkspaceApp = ({
     setSelectedMemoIds,
     setSelectedNotebookId,
     setSelectionMoveTargetNotebookId,
+    initialSelectedMemoId,
   } = useWorkspaceSelection(desktopWorkspaceRestore);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const demoNotebookAutoSelectionHandledRef = useRef(false);
   const [createdMemoEditId, setCreatedMemoEditId] = useState<string | null>(null);
   const pendingCreatedMemoIdRef = useRef<string | null>(null);
-  const pendingQuickSwitcherMemoIdRef = useRef<string | null>(desktopWorkspaceRestore?.selectedMemoId ?? null); // also link/companion/plugin opens not yet in the list
+  const pendingQuickSwitcherMemoIdRef = useRef<string | null>(initialSelectedMemoId); // also link/companion/plugin opens not yet in the list
   useEffect(() => {
     if (!window.edgeeverDesktop?.isAvailable) return;
     writeDesktopWorkspaceRestoreState({

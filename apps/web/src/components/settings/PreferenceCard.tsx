@@ -50,6 +50,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FontChoiceFields } from "./FontChoiceFields";
 import { ColorSchemeSettingsItem } from "./ColorSchemeSettingsItem";
+import { StartPageSettingsItem } from "./StartPageSettingsItem";
 import { SETTINGS_ITEM_ICON_CLASSNAME, SETTINGS_ITEM_TITLE_CLASSNAME } from "./settings-ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -283,6 +284,8 @@ export const PreferenceCard = ({
           </div>
 
           <ColorSchemeSettingsItem />
+
+          <StartPageSettingsItem />
 
           <div className="flex min-h-16 flex-col items-start gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="flex min-w-0 items-center gap-3">

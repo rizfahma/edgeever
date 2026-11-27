@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { StartPageMenuItem } from "./StartPageMenuItem";
 import { publishImageErrorMessage } from "@/lib/publish-image-host";
 import * as m from "motion/react-m";
 import {
@@ -1574,6 +1575,7 @@ export const MemoListPane = ({
                   {memoContextMenu.memo.isPinned ? t("memoList.unpin") : t("memoList.pinMemo")}
                 </DropdownMenuItem>
               )}
+              {view !== "trash" && <StartPageMenuItem memo={memoContextMenu.memo} onDone={() => setMemoContextMenu(null)} />}
               <DropdownMenuItem
                 className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
                 disabled={isLocalMemoId(memoContextMenu.memo.id)}
